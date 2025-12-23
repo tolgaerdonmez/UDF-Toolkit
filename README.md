@@ -3,22 +3,74 @@
 
 [![Star History Chart](https://api.star-history.com/svg?repos=saidsurucu/udf-toolkit&type=Date)](https://www.star-history.com/#saidsurucu/udf-toolkit&Date)
 
+## Installation / Kurulum
+
+### Install from GitHub / GitHub'dan Kurulum
+```bash
+pip install git+https://github.com/tolgaerdonmez/UDF-Toolkit.git
+```
+
+### Install from source / Kaynaktan Kurulum
+```bash
+git clone https://github.com/tolgaerdonmez/UDF-Toolkit.git
+cd UDF-Toolkit
+pip install .
+```
+
+## Usage / Kullanım
+
+### Command Line Interface / Komut Satırı
+
+After installation, you can use the following commands:
+
+Kurulumdan sonra aşağıdaki komutları kullanabilirsiniz:
+
 ## UDF dosyasını DOCX formatına çevirmek için
 ```
-python udf_to_docx.py input.udf
+udf-to-docx input.udf
 ```
 ## UDF dosyasını PDF formatına çevirmek için
 ```
-python udf_to_pdf.py input.udf
+udf-to-pdf input.udf
 ```
 ## DOCX dosyasını UDF formatına çevirmek için
 ```
-python docx_to_udf.py input.docx
+docx-to-udf input.docx
+```
+## UDF dosyasını Markdown formatına çevirmek için
+```
+udf-to-md input.udf
 ```
 Not: En iyi sonucu almak için Windows'ta çalıştırılmalıdır. Bazı DOCX özelliklerini dönüştürmek için Windows kütüphaneleri gereklidir. MacOS ve Linux'ta sonuçlar farklı olabilir.
 ## PDF dosyasını (imaj olarak) UDF formatına çevirmek için
 ```
-python scanned_pdf_to_udf.py input.pdf
+scanned-pdf-to-udf input.pdf
+```
+
+### Python Library / Python Kütüphanesi
+
+You can also use the toolkit as a Python library:
+
+Kütüphaneyi Python'da da kullanabilirsiniz:
+
+```python
+from udf_toolkit import udf_to_docx, udf_to_pdf, udf_to_markdown, convert_docx_to_udf, pdf_to_udf
+
+# Convert UDF to DOCX
+udf_to_docx('input.udf', 'output.docx')
+
+# Convert UDF to PDF
+udf_to_pdf('input.udf', 'output.pdf')
+
+# Convert UDF to Markdown
+markdown_content = udf_to_markdown('input.udf')
+
+# Convert DOCX to UDF
+from udf_toolkit.main import convert
+convert('input.docx', 'output.udf')
+
+# Convert scanned PDF to UDF
+pdf_to_udf('input.pdf', 'output.udf')
 ```
 # Teknik Bilgiye Sahip Olmayanlar İçin Windows'ta Kullanım Talimatları
 

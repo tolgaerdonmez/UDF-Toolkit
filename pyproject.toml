@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "udf-toolkit"
+version = "0.1.0"
+description = "A toolkit for converting files between UDF (UYAP Document Format) and other formats like DOCX, PDF, and Markdown"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "UDF-Toolkit Contributors"}
+]
+keywords = ["udf", "uyap", "docx", "pdf", "conversion", "document"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "python-docx",
+    "PyMuPDF",
+    "Pillow",
+    "reportlab",
+]
+
+[project.urls]
+Homepage = "https://github.com/tolgaerdonmez/UDF-Toolkit"
+Repository = "https://github.com/tolgaerdonmez/UDF-Toolkit"
+
+[project.scripts]
+udf-to-docx = "udf_toolkit.udf_to_docx:main"
+udf-to-pdf = "udf_toolkit.udf_to_pdf:main"
+udf-to-md = "udf_toolkit.udf_to_md:main"
+docx-to-udf = "udf_toolkit.docx_to_udf:docx_to_udf"
+scanned-pdf-to-udf = "udf_toolkit.scanned_pdf_to_udf:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["udf_toolkit*"]

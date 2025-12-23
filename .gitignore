@@ -163,7 +163,6 @@ cython_debug/
 .python-version
 hello.py
 pdf-test.pdf
-pyproject.toml
 *.udf
 *.lock
 *.pdf
