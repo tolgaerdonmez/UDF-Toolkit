@@ -4,6 +4,11 @@ import xml.etree.ElementTree as ET
 import zipfile
 import base64
 import io
+from typing import Union, Optional
+
+from udf_toolkit.types import UDFMetadata, ConversionResult, UDFInput
+from udf_toolkit.core import parse_udf_content, extract_udf_metadata
+
 
 def is_zip_file(file_path):
     """Check if the file is a valid ZIP file"""
@@ -12,6 +17,174 @@ def is_zip_file(file_path):
             return True
     except zipfile.BadZipFile:
         return False
+
+
+def convert_udf_to_markdown(data: UDFInput, output_path: Optional[str] = None) -> ConversionResult:
+    """
+    Convert UDF content to Markdown format with metadata extraction.
+    
+    This function supports in-memory conversion and extracts UDF metadata
+    for potential round-trip conversion back to UDF.
+    
+    Args:
+        data: UDF content as file path (str), bytes, or XML string
+        output_path: Optional path to save the Markdown file. If None, only returns string.
+        
+    Returns:
+        ConversionResult containing:
+            - content: Markdown content as string
+            - metadata: Extracted UDF metadata for round-trip conversion
+            - original_text: The original text content from UDF
+            
+    Raises:
+        ValueError: If the input cannot be parsed
+        
+    Example:
+        >>> # From file path
+        >>> result = convert_udf_to_markdown("document.udf")
+        >>> markdown_str = result.content
+        >>> metadata = result.metadata
+        
+        >>> # From bytes
+        >>> with open("document.udf", "rb") as f:
+        ...     result = convert_udf_to_markdown(f.read())
+        
+        >>> # Save to file and get result
+        >>> result = convert_udf_to_markdown("document.udf", "output.md")
+    """
+    # Parse UDF content
+    root, content_text = parse_udf_content(data)
+    
+    # Extract metadata for round-trip conversion
+    metadata = extract_udf_metadata(root, content_text)
+    
+    # Build markdown content
+    markdown_output = _build_markdown(root, content_text)
+    
+    # Optionally save to file
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_output)
+    
+    return ConversionResult(
+        content=markdown_output,
+        metadata=metadata,
+        original_text=content_text,
+    )
+
+
+def _build_markdown(root: ET.Element, content_text: str) -> str:
+    """Build markdown content from parsed UDF."""
+    markdown_output = ""
+    
+    # Create a dictionary for style definitions
+    styles = {}
+    
+    # Retrieve style information
+    styles_element = root.find('styles')
+    if styles_element is not None:
+        for style in styles_element.findall('style'):
+            style_name = style.get('name')
+            style_attributes = {
+                'family': style.get('family'),
+                'size': int(style.get('size', 12)),
+                'bold': style.get('bold', 'false') == 'true',
+                'italic': style.get('italic', 'false') == 'true',
+                'foreground': int(style.get('foreground', '-13421773')),
+            }
+            styles[style_name] = style_attributes
+    
+    # Process the 'elements' section
+    elements_element = root.find('elements')
+    
+    if elements_element is not None:
+        for elem in elements_element:
+            if elem.tag == 'paragraph':
+                paragraph_text = ""
+                
+                alignment = elem.get('Alignment', '0')
+                alignment_tag = ""
+                if alignment == '1':
+                    alignment_tag = "<div align='center'>"
+                elif alignment == '2':
+                    alignment_tag = "<div align='right'>"
+                elif alignment == '3':
+                    alignment_tag = "<div align='justify'>"
+                
+                for child in elem:
+                    if child.tag == 'content':
+                        start_offset = int(child.get('startOffset', '0'))
+                        length = int(child.get('length', '0'))
+                        text = content_text[start_offset:start_offset+length]
+                        
+                        if child.get('bold', 'false') == 'true' and child.get('italic', 'false') == 'true':
+                            text = f"***{text}***"
+                        elif child.get('bold', 'false') == 'true':
+                            text = f"**{text}**"
+                        elif child.get('italic', 'false') == 'true':
+                            text = f"*{text}*"
+                        
+                        paragraph_text += text
+                    
+                    elif child.tag == 'space':
+                        paragraph_text += " "
+                    elif child.tag == 'image':
+                        paragraph_text += "[Image]"
+                
+                if alignment_tag:
+                    paragraph_text = f"{alignment_tag}{paragraph_text}</div>"
+                
+                markdown_output += paragraph_text + "\n\n"
+            
+            elif elem.tag == 'table':
+                column_count = int(elem.get('columnCount', '1'))
+                rows = elem.findall('row')
+                
+                markdown_output += "| " + " | ".join(["Column"] * column_count) + " |\n"
+                markdown_output += "| " + " | ".join(["---"] * column_count) + " |\n"
+                
+                for row in rows:
+                    cells = row.findall('cell')
+                    row_text = "| "
+                    
+                    for cell in cells:
+                        cell_text = ""
+                        paragraphs = cell.findall('paragraph')
+                        
+                        for para in paragraphs:
+                            para_text = ""
+                            
+                            for child in para:
+                                if child.tag == 'content':
+                                    start_offset = int(child.get('startOffset', '0'))
+                                    length = int(child.get('length', '0'))
+                                    text = content_text[start_offset:start_offset+length]
+                                    
+                                    if child.get('bold', 'false') == 'true' and child.get('italic', 'false') == 'true':
+                                        text = f"***{text}***"
+                                    elif child.get('bold', 'false') == 'true':
+                                        text = f"**{text}**"
+                                    elif child.get('italic', 'false') == 'true':
+                                        text = f"*{text}*"
+                                    
+                                    para_text += text
+                                
+                                elif child.tag == 'space':
+                                    para_text += " "
+                                elif child.tag == 'image':
+                                    para_text += "[Image]"
+                            
+                            cell_text += para_text + " "
+                        
+                        cell_text = cell_text.replace("|", "\\|").strip()
+                        row_text += cell_text + " | "
+                    
+                    markdown_output += row_text + "\n"
+                
+                markdown_output += "\n"
+    
+    return markdown_output
+
 
 def udf_to_markdown(udf_file):
     """Convert a UDF file to Markdown format.

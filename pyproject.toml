@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "udf-toolkit"
-version = "0.1.0"
+version = "0.2.0"
 description = "A toolkit for converting files between UDF (UYAP Document Format) and other formats like DOCX, PDF, and Markdown"
 readme = "README.md"
 license = {text = "MIT"}

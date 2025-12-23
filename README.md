@@ -49,9 +49,79 @@ scanned-pdf-to-udf input.pdf
 
 ### Python Library / Python Kütüphanesi
 
-You can also use the toolkit as a Python library:
+The toolkit provides both in-memory conversion API and file-based functions.
 
-Kütüphaneyi Python'da da kullanabilirsiniz:
+Kütüphane hem bellek içi dönüşüm API'si hem de dosya tabanlı fonksiyonlar sunar.
+
+#### In-Memory Conversion API (Recommended for Production)
+
+The in-memory API accepts `str` (file path or XML content), or `bytes` as input and returns a `ConversionResult` object containing:
+- `content`: The converted output as `bytes` or `str`
+- `metadata`: `UDFMetadata` object preserving UDF-specific information for round-trip conversion
+- `original_text`: The original text content from the UDF file
+
+```python
+from udf_toolkit import (
+    convert_udf_to_docx,
+    convert_udf_to_pdf,
+    convert_udf_to_markdown,
+    ConversionResult,
+    UDFMetadata,
+)
+
+# Convert from file path
+result = convert_udf_to_docx("document.udf")
+docx_bytes = result.content  # bytes
+metadata = result.metadata   # UDFMetadata object
+
+# Convert from bytes (in-memory)
+with open("document.udf", "rb") as f:
+    udf_bytes = f.read()
+result = convert_udf_to_pdf(udf_bytes)
+pdf_bytes = result.content
+
+# Convert to markdown
+result = convert_udf_to_markdown("document.udf")
+markdown_str = result.content  # str
+
+# Save to file while also getting the result
+result = convert_udf_to_docx("document.udf", output_path="output.docx")
+
+# Get metadata for round-trip conversion back to UDF
+metadata_json = result.get_metadata_json()
+print(metadata_json)  # JSON string with all UDF-specific metadata
+```
+
+#### Working with UDF Metadata
+
+The `UDFMetadata` class preserves all UDF-specific information that may be lost during conversion:
+
+```python
+from udf_toolkit import convert_udf_to_docx, UDFMetadata
+
+result = convert_udf_to_docx("document.udf")
+metadata = result.metadata
+
+# Access page format settings
+print(f"Left margin: {metadata.page_format.left_margin}")
+print(f"Paper orientation: {metadata.page_format.paper_orientation}")
+
+# Access style definitions
+for style in metadata.styles:
+    print(f"Style: {style.name}, Font: {style.family}, Size: {style.size}")
+
+# Serialize metadata for storage
+import json
+metadata_dict = metadata.to_dict()
+json_str = json.dumps(metadata_dict)
+
+# Restore metadata later
+restored_metadata = UDFMetadata.from_dict(json.loads(json_str))
+```
+
+#### Legacy File-Based API
+
+For simple file-to-file conversions:
 
 ```python
 from udf_toolkit import udf_to_docx, udf_to_pdf, udf_to_markdown, convert_docx_to_udf, pdf_to_udf

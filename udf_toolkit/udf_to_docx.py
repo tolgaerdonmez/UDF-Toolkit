@@ -10,6 +10,11 @@ from docx.enum.section import WD_ORIENT
 import base64
 import io
 import zipfile
+from typing import Union, Optional
+
+from udf_toolkit.types import UDFMetadata, ConversionResult, UDFInput
+from udf_toolkit.core import parse_udf_content, extract_udf_metadata
+
 
 def is_zip_file(file_path):
     """Check if the file is a valid ZIP file"""
@@ -97,6 +102,307 @@ def process_background_image(document, bg_image_data, bg_image_source, output_fi
     elif bg_image_source:
         print(f"Background image source path: {bg_image_source}. Please manually set it as document background in Word.")
     return False
+
+
+def convert_udf_to_docx(data: UDFInput, output_path: Optional[str] = None) -> ConversionResult:
+    """
+    Convert UDF content to DOCX format with metadata extraction.
+    
+    This function supports in-memory conversion and extracts UDF metadata
+    for potential round-trip conversion back to UDF.
+    
+    Args:
+        data: UDF content as file path (str), bytes, or XML string
+        output_path: Optional path to save the DOCX file. If None, only returns bytes.
+        
+    Returns:
+        ConversionResult containing:
+            - content: DOCX file as bytes
+            - metadata: Extracted UDF metadata for round-trip conversion
+            - original_text: The original text content from UDF
+            
+    Raises:
+        ValueError: If the input cannot be parsed
+        
+    Example:
+        >>> # From file path
+        >>> result = convert_udf_to_docx("document.udf")
+        >>> docx_bytes = result.content
+        >>> metadata = result.metadata
+        
+        >>> # From bytes
+        >>> with open("document.udf", "rb") as f:
+        ...     result = convert_udf_to_docx(f.read())
+        
+        >>> # Save to file and get result
+        >>> result = convert_udf_to_docx("document.udf", "output.docx")
+    """
+    # Parse UDF content
+    root, content_text = parse_udf_content(data)
+    
+    # Extract metadata for round-trip conversion
+    metadata = extract_udf_metadata(root, content_text)
+    
+    # Build the DOCX document
+    document = _build_docx_document(root, content_text, metadata)
+    
+    # Save to bytes
+    buffer = io.BytesIO()
+    document.save(buffer)
+    buffer.seek(0)
+    docx_bytes = buffer.read()
+    
+    # Optionally save to file
+    if output_path:
+        with open(output_path, 'wb') as f:
+            f.write(docx_bytes)
+    
+    return ConversionResult(
+        content=docx_bytes,
+        metadata=metadata,
+        original_text=content_text,
+    )
+
+
+def _build_docx_document(root: ET.Element, content_text: str, metadata: UDFMetadata) -> Document:
+    """Build a DOCX Document from parsed UDF content."""
+    # Create a new Word document
+    document = Document()
+    
+    # Ensure default headers and footers are created for all sections
+    for section in document.sections:
+        section.different_first_page = False
+        section.header.is_linked_to_previous = False
+        section.footer.is_linked_to_previous = False
+    
+    # Apply page format from metadata
+    page_format = metadata.page_format
+    left_margin = page_format.left_margin / 72 * Inches(1).pt
+    right_margin = page_format.right_margin / 72 * Inches(1).pt
+    top_margin = page_format.top_margin / 72 * Inches(1).pt
+    bottom_margin = page_format.bottom_margin / 72 * Inches(1).pt
+    
+    for section in document.sections:
+        section.left_margin = Pt(left_margin)
+        section.right_margin = Pt(right_margin)
+        section.top_margin = Pt(top_margin)
+        section.bottom_margin = Pt(bottom_margin)
+        
+        if page_format.paper_orientation == '2':
+            section.orientation = WD_ORIENT.LANDSCAPE
+        else:
+            section.orientation = WD_ORIENT.PORTRAIT
+    
+    # Process elements
+    elements_element = root.find('elements')
+    if elements_element is not None:
+        _process_elements(document, elements_element, content_text)
+    
+    return document
+
+
+def _process_elements(document: Document, elements_element: ET.Element, content_text: str):
+    """Process all elements and add them to the document."""
+    # Get header and footer elements
+    header_element = elements_element.find('header')
+    footer_element = elements_element.find('footer')
+    
+    # Process header
+    if header_element is not None:
+        section = document.sections[0]
+        header = section.header
+        
+        for p in header.paragraphs:
+            p._element.getparent().remove(p._element)
+            p._p = None
+            p._element = None
+        
+        header_para = header.add_paragraph()
+        
+        header_color_result = convert_color(header_element.get('background'))
+        if header_color_result:
+            header_bg_color, rgb_values = header_color_result
+            print(f"Header background color: RGB({rgb_values[0]}, {rgb_values[1]}, {rgb_values[2]}) - Please set it manually in Word.")
+        
+        for para_elem in header_element.findall('paragraph'):
+            if para_elem is not header_element.findall('paragraph')[0]:
+                header_para = header.add_paragraph()
+            
+            alignment = para_elem.get('Alignment', '0')
+            header_para.alignment = get_alignment_style(alignment)
+            
+            _process_paragraph_content(header_para, para_elem, content_text)
+    
+    # Process footer
+    if footer_element is not None:
+        section = document.sections[0]
+        footer = section.footer
+        
+        for p in footer.paragraphs:
+            p._element.getparent().remove(p._element)
+            p._p = None
+            p._element = None
+        
+        footer_para = footer.add_paragraph()
+        
+        footer_color_result = convert_color(footer_element.get('background'))
+        if footer_color_result:
+            footer_bg_color, rgb_values = footer_color_result
+            print(f"Footer background color: RGB({rgb_values[0]}, {rgb_values[1]}, {rgb_values[2]}) - Please set it manually in Word.")
+        
+        for para_elem in footer_element.findall('paragraph'):
+            if para_elem is not footer_element.findall('paragraph')[0]:
+                footer_para = footer.add_paragraph()
+            
+            alignment = para_elem.get('Alignment', '0')
+            footer_para.alignment = get_alignment_style(alignment)
+            
+            _process_paragraph_content(footer_para, para_elem, content_text)
+    
+    # Process body elements
+    for elem in elements_element:
+        if elem.tag == 'paragraph':
+            paragraph = document.add_paragraph()
+            
+            alignment = elem.get('Alignment', '0')
+            paragraph.alignment = get_alignment_style(alignment)
+            
+            left_indent = elem.get('LeftIndent')
+            right_indent = elem.get('RightIndent')
+            first_line_indent = elem.get('FirstLineIndent')
+            
+            if left_indent:
+                paragraph.paragraph_format.left_indent = Pt(float(left_indent))
+            if right_indent:
+                paragraph.paragraph_format.right_indent = Pt(float(right_indent))
+            if first_line_indent:
+                paragraph.paragraph_format.first_line_indent = Pt(float(first_line_indent))
+            
+            line_spacing = elem.get('LineSpacing')
+            if line_spacing:
+                paragraph.paragraph_format.line_spacing = float(line_spacing)
+            
+            _process_paragraph_content(paragraph, elem, content_text)
+            
+        elif elem.tag == 'page-break':
+            document.add_page_break()
+            
+        elif elem.tag == 'table':
+            _process_table(document, elem, content_text)
+
+
+def _process_paragraph_content(paragraph, elem: ET.Element, content_text: str):
+    """Process paragraph content elements."""
+    for child in elem:
+        if child.tag == 'content':
+            start_offset = int(child.get('startOffset', '0'))
+            length = int(child.get('length', '0'))
+            text = content_text[start_offset:start_offset+length]
+            
+            run = paragraph.add_run(text)
+            run.font.name = "DejaVuSerif"
+            
+            size = child.get('size')
+            if size:
+                run.font.size = Pt(float(size))
+            
+            run.bold = child.get('bold', 'false') == 'true'
+            run.italic = child.get('italic', 'false') == 'true'
+            if child.get('underline', 'false') == 'true':
+                run.underline = WD_UNDERLINE.SINGLE
+            
+            foreground_result = convert_color(child.get('foreground'))
+            if foreground_result:
+                run.font.color.rgb = foreground_result[0]
+        
+        elif child.tag == 'field':
+            field_name = child.get('fieldName', '')
+            if child.get('startOffset') and child.get('length'):
+                start_offset = int(child.get('startOffset', '0'))
+                length = int(child.get('length', '0'))
+                field_text = content_text[start_offset:start_offset+length]
+            else:
+                field_text = field_name
+            
+            run = paragraph.add_run(field_text)
+            run.font.name = "DejaVuSerif"
+            run.bold = child.get('bold', 'false') == 'true'
+            run.italic = child.get('italic', 'false') == 'true'
+            if child.get('underline', 'false') == 'true':
+                run.underline = WD_UNDERLINE.SINGLE
+            
+            foreground_result = convert_color(child.get('foreground'))
+            if foreground_result:
+                run.font.color.rgb = foreground_result[0]
+        
+        elif child.tag == 'space':
+            paragraph.add_run(" ")
+        
+        elif child.tag == 'image':
+            image_data = child.get('imageData')
+            if image_data:
+                image_bytes = base64.b64decode(image_data)
+                image_stream = io.BytesIO(image_bytes)
+                run = paragraph.add_run()
+                run.add_picture(image_stream)
+
+
+def _process_table(document: Document, elem: ET.Element, content_text: str):
+    """Process a table element."""
+    column_count = int(elem.get('columnCount', '1'))
+    rows = elem.findall('row')
+    
+    col_widths = []
+    col_spans = elem.get('columnSpans', '')
+    if col_spans:
+        try:
+            col_spans_list = col_spans.split(',')
+            if len(col_spans_list) == column_count:
+                for span in col_spans_list:
+                    col_widths.append(Pt(float(span)))
+        except (ValueError, IndexError):
+            col_widths = []
+    
+    table = document.add_table(rows=len(rows), cols=column_count)
+    
+    border_style = elem.get('border', 'borderCell')
+    if border_style in ['borderCell', 'border']:
+        table.style = 'Table Grid'
+    elif border_style == 'borderOuter':
+        table.style = 'Table Grid'
+    
+    for row_idx, row in enumerate(rows):
+        row_height = row.get('height_min')
+        if row_height:
+            table.rows[row_idx].height = Pt(float(row_height) * 72)
+        
+        cells = row.findall('cell')
+        for col_idx, cell in enumerate(cells):
+            if col_idx >= column_count:
+                continue
+            
+            table_cell = table.rows[row_idx].cells[col_idx]
+            paragraphs = cell.findall('paragraph')
+            
+            cell_paragraph = table_cell.paragraphs[0] if table_cell.paragraphs else table_cell.add_paragraph()
+            
+            for para_idx, para in enumerate(paragraphs):
+                if para_idx > 0:
+                    cell_paragraph = table_cell.add_paragraph()
+                
+                alignment = para.get('Alignment', '0')
+                cell_paragraph.alignment = get_alignment_style(alignment)
+                
+                left_indent = para.get('LeftIndent')
+                right_indent = para.get('RightIndent')
+                
+                if left_indent:
+                    cell_paragraph.paragraph_format.left_indent = Pt(float(left_indent))
+                if right_indent:
+                    cell_paragraph.paragraph_format.right_indent = Pt(float(right_indent))
+                
+                _process_paragraph_content(cell_paragraph, para, content_text)
+
 
 def udf_to_docx(udf_file, docx_file):
     """Convert a UDF file to DOCX format.
