@@ -149,9 +149,12 @@ def convert_udf_to_pdf(data: UDFInput, output_path: Optional[str] = None) -> Con
     
     # Build PDF to bytes
     buffer = io.BytesIO()
-    _build_pdf_to_buffer(buffer, root, content_text, metadata)
-    buffer.seek(0)
-    pdf_bytes = buffer.read()
+    try:
+        _build_pdf_to_buffer(buffer, root, content_text, metadata)
+        buffer.seek(0)
+        pdf_bytes = buffer.read()
+    finally:
+        buffer.close()
     
     # Optionally save to file
     if output_path:

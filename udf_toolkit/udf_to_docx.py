@@ -148,9 +148,12 @@ def convert_udf_to_docx(data: UDFInput, output_path: Optional[str] = None) -> Co
     
     # Save to bytes
     buffer = io.BytesIO()
-    document.save(buffer)
-    buffer.seek(0)
-    docx_bytes = buffer.read()
+    try:
+        document.save(buffer)
+        buffer.seek(0)
+        docx_bytes = buffer.read()
+    finally:
+        buffer.close()
     
     # Optionally save to file
     if output_path:

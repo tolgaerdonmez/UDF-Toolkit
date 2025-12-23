@@ -5,6 +5,7 @@ This module provides data classes for representing UDF documents and their compo
 enabling in-memory conversions while preserving document integrity for round-trip conversions.
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
@@ -284,13 +285,11 @@ class UDFMetadata:
     
     def to_json(self) -> str:
         """Serialize to JSON string."""
-        import json
         return json.dumps(self.to_dict(), indent=2)
     
     @classmethod
     def from_json(cls, json_str: str) -> "UDFMetadata":
         """Deserialize from JSON string."""
-        import json
         data = json.loads(json_str)
         return cls.from_dict(data)
     
