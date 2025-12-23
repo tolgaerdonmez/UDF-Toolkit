@@ -14,15 +14,24 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 
-# Add fonts that support Turkish characters with bold and italic variations
-pdfmetrics.registerFont(TTFont('DejaVuSerif', 'DejaVuSerif.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', 'DejaVuSerif-Bold.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', 'DejaVuSerif-Italic.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSerif-BoldItalic', 'DejaVuSerif-BoldItalic.ttf'))
+# Try to register DejaVu fonts that support Turkish characters
+# Fall back to default fonts if DejaVuSerif is not available
+_USE_DEJAVU_FONTS = False
+try:
+    pdfmetrics.registerFont(TTFont('DejaVuSerif', 'DejaVuSerif.ttf'))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', 'DejaVuSerif-Bold.ttf'))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', 'DejaVuSerif-Italic.ttf'))
+    pdfmetrics.registerFont(TTFont('DejaVuSerif-BoldItalic', 'DejaVuSerif-BoldItalic.ttf'))
+    pdfmetrics.registerFontFamily('DejaVuSerif', normal='DejaVuSerif', bold='DejaVuSerif-Bold',
+                                 italic='DejaVuSerif-Italic', boldItalic='DejaVuSerif-BoldItalic')
+    _USE_DEJAVU_FONTS = True
+except Exception:
+    # DejaVu fonts not available, will use Helvetica as fallback
+    pass
 
-# Create font family
-pdfmetrics.registerFontFamily('DejaVuSerif', normal='DejaVuSerif', bold='DejaVuSerif-Bold',
-                             italic='DejaVuSerif-Italic', boldItalic='DejaVuSerif-BoldItalic')
+def _get_font_name():
+    """Get the appropriate font name based on availability."""
+    return 'DejaVuSerif' if _USE_DEJAVU_FONTS else 'Helvetica'
 
 def is_zip_file(file_path):
     """Check if the file is a valid ZIP file"""
@@ -173,11 +182,11 @@ def udf_to_pdf(udf_file, pdf_file):
         pdf_elements = []
         styles = getSampleStyleSheet()
         
-        # Define a base style that supports Turkish characters - default to DejaVuSerif
+        # Define a base style that supports Turkish characters
         base_style = ParagraphStyle(
             'CustomNormal', 
             parent=styles['Normal'],
-            fontName='DejaVuSerif',  # Setting DejaVuSerif as default font
+            fontName=_get_font_name(),
             encoding='utf-8'
         )
         
@@ -186,14 +195,11 @@ def udf_to_pdf(udf_file, pdf_file):
         if styles_element is not None:
             for style_elem in styles_element.findall('style'):
                 style_name = style_elem.get('name', '')
-                style_family = style_elem.get('family', 'DejaVuSerif')
+                style_family = _get_font_name()
                 style_size = float(style_elem.get('size', '12'))
                 style_bold = style_elem.get('bold', 'false') == 'true'
                 style_italic = style_elem.get('italic', 'false') == 'true'
                 style_foreground = convert_color(style_elem.get('foreground'))
-                
-                # Create the style - always use DejaVuSerif
-                style_family = 'DejaVuSerif'
                     
                 custom_style = ParagraphStyle(
                     style_name,
@@ -232,10 +238,9 @@ def udf_to_pdf(udf_file, pdf_file):
             size = content_elem.get('size')
             foreground = convert_color(content_elem.get('foreground'))
             
-            # Apply text formatting - always use DejaVuSerif regardless of what's specified
+            # Apply text formatting
             if family:
-                # Ignore the family from XML and always use DejaVuSerif
-                current_style.fontName = 'DejaVuSerif'
+                current_style.fontName = _get_font_name()
             if size:
                 current_style.fontSize = float(size)
             if foreground:
@@ -272,8 +277,8 @@ def udf_to_pdf(udf_file, pdf_file):
             first_line_indent = float(para_elem.get('FirstLineIndent', '0'))
             line_spacing = float(para_elem.get('LineSpacing', '1.2'))
             
-            # Get paragraph font family - always use DejaVuSerif regardless of what's in the XML
-            family = 'DejaVuSerif'
+            # Get paragraph font family
+            family = _get_font_name()
             size = float(para_elem.get('size', '12'))
             
             # Create a custom style for this paragraph
