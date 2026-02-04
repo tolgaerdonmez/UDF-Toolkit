@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "udf-toolkit"
+version = "0.1.0"
+description = "UDF Toolkit for converting UYAP UDF files"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "udf-toolkit contributors" }
+]
+dependencies = [
+  "python-docx",
+  "PyMuPDF",
+  "Pillow",
+  "reportlab",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+udf-toolkit = "udf_toolkit.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/udf_toolkit"]

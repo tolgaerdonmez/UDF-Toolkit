@@ -1,6 +1,32 @@
 # UDF Toolkit
  UYAP UDF dosya formatı ile ilgili çalışmalar
 
+## Python Paket Olarak Kurulum
+`uv` ile:
+```
+uv pip install -e .
+```
+
+Pip ile:
+```
+pip install -e .
+```
+
+Python API örneği:
+```python
+from udf_toolkit import convert
+
+convert("input.docx", target="udf")
+convert("input.udf", target="docx")
+convert("input.udf", target="pdf")
+convert("input.udf", target="md")
+```
+
+CLI örneği:
+```
+udf-toolkit convert input.docx output.udf --source docx --target udf
+```
+
 [![Star History Chart](https://api.star-history.com/svg?repos=saidsurucu/udf-toolkit&type=Date)](https://www.star-history.com/#saidsurucu/udf-toolkit&Date)
 
 ## UDF dosyasını DOCX formatına çevirmek için
